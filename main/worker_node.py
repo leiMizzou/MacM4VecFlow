@@ -7,7 +7,7 @@
 
 import os
 import time
-import socket
+import socket  # 确保socket模块在最顶层导入
 import queue
 import threading
 import traceback
@@ -96,7 +96,7 @@ def worker_embedding_processor(chunk_queue, result_queue, chunk_done, embedding_
         start_time = time.time()
         
         # 状态报告频率
-        status_interval = 2000
+        status_interval = 1000  # 更频繁的状态报告
         
         # 创建批次容器
         batch_texts = []
@@ -108,10 +108,10 @@ def worker_embedding_processor(chunk_queue, result_queue, chunk_done, embedding_
         
         # 内存使用监控
         last_memory_check = time.time()
-        memory_check_interval = 30  # 秒
+        memory_check_interval = 20  # 缩短内存检查间隔(秒)
         
         # 动态调整批处理大小
-        current_batch_size = batch_size
+        current_batch_size = min(batch_size, 256)  # 降低初始批处理大小
         processing_times = []  # 跟踪处理时间
         
         # 错误计数
@@ -121,6 +121,10 @@ def worker_embedding_processor(chunk_queue, result_queue, chunk_done, embedding_
         # 健康监控
         monitor = SystemMonitor(timeout=180)  # 3分钟无进度报警
         monitor.start()
+        
+        # 性能监控变量
+        queue_full_count = 0
+        last_queue_check = time.time()
         
         while not (chunk_done.is_set() and chunk_queue.empty()):
             try:
@@ -135,6 +139,13 @@ def worker_embedding_processor(chunk_queue, result_queue, chunk_done, embedding_
                 while result_queue.qsize() > result_queue.maxsize * 0.9:
                     logger.warning(f"结果队列接近满载 ({result_queue.qsize()}/{result_queue.maxsize})，等待空间...")
                     time.sleep(0.5)
+                    queue_full_count += 1
+                    
+                    # 如果队列持续满，强制清理内存
+                    if queue_full_count > 10:
+                        logger.warning("结果队列持续满载，执行强制内存清理")
+                        clean_memory(force_gc=True)
+                        queue_full_count = 0
                 
                 # 轮询，超时以检查完成标志
                 try:
@@ -169,6 +180,26 @@ def worker_embedding_processor(chunk_queue, result_queue, chunk_done, embedding_
                 except queue.Empty:
                     # 队列为空，但不是结束 - 处理任何已累积的批次
                     pass
+                
+                # 定期检查和报告队列状态
+                current_time = time.time()
+                if current_time - last_queue_check >= 60:  # 每分钟检查一次
+                    chunk_queue_size = chunk_queue.qsize()
+                    result_queue_size = result_queue.qsize()
+                    logger.info(f"队列状态: 块队列 {chunk_queue_size}, 结果队列 {result_queue_size}")
+                    
+                    # 检测队列瓶颈
+                    if chunk_queue_size > chunk_queue.maxsize * 0.9:
+                        logger.warning(f"检测到块队列瓶颈! ({chunk_queue_size}/{chunk_queue.maxsize})")
+                        
+                        # 如果块队列几乎满且当前批处理大小较小，增加批处理大小以加快消费
+                        if current_batch_size < 512:
+                            old_batch_size = current_batch_size
+                            current_batch_size = min(current_batch_size * 1.5, 512)
+                            current_batch_size = int(current_batch_size)
+                            logger.info(f"增大批处理大小: {old_batch_size} -> {current_batch_size}")
+                    
+                    last_queue_check = current_time
                 
                 # 决定是否处理当前批次 (满足任一条件):
                 # 1. 批次大小达到目标
@@ -225,9 +256,8 @@ def worker_embedding_processor(chunk_queue, result_queue, chunk_done, embedding_
                                 logger.critical(f"连续错误超过阈值 ({max_consecutive_errors})，尝试恢复...")
                                 # 尝试重新创建嵌入处理器
                                 try:
+                                    clean_memory(force_gc=True)  # 先进行内存清理
                                     embed_processor = TextProcessor()
-                                    # 清理内存
-                                    clean_memory(force_gc=True)
                                     logger.info("嵌入处理器已重新创建")
                                     error_count = 0
                                 except Exception as re:
@@ -252,18 +282,18 @@ def worker_embedding_processor(chunk_queue, result_queue, chunk_done, embedding_
                         if len(processing_times) >= 3:
                             avg_time = sum(processing_times) / len(processing_times)
                             
-                            # 根据平均处理时间调整批处理大小
-                            if avg_time < 0.5 and current_batch_size < 1024:
-                                # 处理速度快，增加批处理大小
-                                current_batch_size = min(current_batch_size * 1.2, 1024)
+                            # 根据平均处理时间调整批处理大小 - 更积极地调整
+                            if avg_time < 0.5 and current_batch_size < 512 and chunk_queue.qsize() > chunk_queue.maxsize * 0.5:
+                                # 处理速度快且队列有积压，增加批处理大小
+                                current_batch_size = min(current_batch_size * 1.2, 512)
                                 current_batch_size = int(current_batch_size)
-                            elif avg_time > 2.0 and current_batch_size > 128:
-                                # 处理速度慢，减小批处理大小
-                                current_batch_size = max(current_batch_size * 0.8, 128)
+                            elif avg_time > 1.5 and current_batch_size > 64:
+                                # 处理速度慢，更积极地减小批处理大小
+                                current_batch_size = max(current_batch_size * 0.7, 64)
                                 current_batch_size = int(current_batch_size)
                     
                     # 周期性地清理内存
-                    if processed_chunks % 5000 == 0 and processed_chunks > 0:
+                    if processed_chunks % 3000 == 0 and processed_chunks > 0:  # 更频繁的内存检查
                         # 获取当前内存使用状态
                         if time.time() - last_memory_check >= memory_check_interval:
                             try:
@@ -274,7 +304,7 @@ def worker_embedding_processor(chunk_queue, result_queue, chunk_done, embedding_
                                 last_memory_check = time.time()
                                 
                                 # 如果内存占用过高，清理
-                                if memory_mb > 3500:  # 3.5GB
+                                if memory_mb > 3000:  # 降低到3GB
                                     clean_memory(force_gc=True)
                                     logger.info("执行强制内存清理")
                             except:
@@ -297,6 +327,14 @@ def worker_embedding_processor(chunk_queue, result_queue, chunk_done, embedding_
                     logger.info(f"  → 缓存命中率: {cache_stats['hit_rate']*100:.1f}%, "
                           f"命中/未命中: {cache_stats['hits']}/{cache_stats['misses']}, "
                           f"批处理大小: {current_batch_size}")
+                    
+                    # 获取并输出内存使用状态
+                    try:
+                        process = psutil.Process(os.getpid())
+                        memory_mb = process.memory_info().rss / (1024 * 1024)
+                        logger.info(f"  → 内存使用: {memory_mb:.1f}MB, 系统内存: {psutil.virtual_memory().percent}%")
+                    except:
+                        pass
                     
                     # 更新进度
                     monitor.update_progress()
@@ -366,9 +404,11 @@ def run_worker(args):
     # 应用系统优化
     optimize_system_for_m4()
     
-    # 创建通信和数据库处理对象
+    # 预先初始化关键变量，以防early exit时仍能正确清理资源
     comm = None
     db_processor = None
+    system_monitor = None
+    thread_pool = []  # 确保thread_pool变量在finally块之前被定义
     
     try:
         # 数据库配置
@@ -399,7 +439,7 @@ def run_worker(args):
         
         # 向协调器注册
         worker_info = {
-            'hostname': socket.gethostname(),
+            'hostname': socket.gethostname(),  # 确保socket模块已正确导入
             'pid': os.getpid(),
             'device': device,
             'cores': os.cpu_count(),
@@ -461,6 +501,18 @@ def run_worker(args):
                         # 更新进度
                         system_monitor.update_progress()
                         
+                        # 检查块队列是否接近满载 - 实现背压
+                        if chunk_queue.qsize() > chunk_queue_size * 0.8:
+                            logger.warning(f"块队列接近满载 ({chunk_queue.qsize()}/{chunk_queue_size})，暂停生产...")
+                            # 等待队列减少到更低水位线
+                            while chunk_queue.qsize() > chunk_queue_size * 0.5:
+                                time.sleep(1)
+                                # 如果嵌入处理完成，应该跳出等待
+                                if embedding_done.is_set():
+                                    logger.error("嵌入处理已完成但块队列仍然满！跳过等待。")
+                                    break
+                            logger.info(f"块队列水位降低 ({chunk_queue.qsize()}/{chunk_queue_size})，恢复生产")
+                        
                         # 并行处理块
                         futures = []
                         sub_batch_size = max(1, batch_size // num_chunk_processes)
@@ -475,6 +527,15 @@ def run_worker(args):
                             try:
                                 chunks = future.result()
                                 total_chunks += len(chunks)
+                                
+                                # 将块添加到队列前，再次检查队列状态
+                                if chunk_queue.qsize() > chunk_queue_size * 0.9:
+                                    logger.warning(f"块队列高水位 ({chunk_queue.qsize()}/{chunk_queue_size})，暂停添加...")
+                                    # 等待队列空间
+                                    while chunk_queue.qsize() > chunk_queue_size * 0.7:
+                                        time.sleep(0.5)
+                                        if embedding_done.is_set():
+                                            break
                                 
                                 # 将块添加到队列
                                 for chunk in chunks:
@@ -498,6 +559,14 @@ def run_worker(args):
                         chunk_time = time.time() - batch_start
                         logger.info(f"  → 批次 {batch_idx+1} 文本切分完成，耗时 {chunk_time:.2f}秒")
                         logger.info(f"  → 已生成 {total_chunks} 个文本块，队列大小: {chunk_queue.qsize()}")
+                        
+                        # 获取内存使用信息
+                        try:
+                            process = psutil.Process(os.getpid())
+                            memory_mb = process.memory_info().rss / (1024 * 1024)
+                            logger.info(f"  → 进程内存使用: {memory_mb:.1f}MB")
+                        except:
+                            pass
                         
                         # 更新进度
                         system_monitor.update_progress()
@@ -586,7 +655,7 @@ def run_worker(args):
                 
                 # 通知协调器本节点处理完成 - 尝试多次发送确保成功
                 for attempt in range(5):
-                    if comm.send_message('coordinator', {'status': 'complete', 'count': sent_count}):
+                    if comm.send_message('tasks', {'status': 'complete', 'count': sent_count}):
                         logger.info("成功发送完成通知到协调器")
                         break
                     else:
@@ -629,18 +698,18 @@ def run_worker(args):
             logger.info("启动文本切分线程...")
             chunk_thread.start()
             
-            # 小延迟让块开始积累
-            time.sleep(1)
+            # 小延迟让块开始积累 - 增加延迟
+            time.sleep(2)
             
             logger.info("启动嵌入处理线程...")
             for i, thread in enumerate(embedding_threads):
                 thread.start()
                 logger.info(f"嵌入处理线程 {i+1}/{len(embedding_threads)} 已启动")
                 # 为每个嵌入线程添加小延迟，避免同时启动造成的资源竞争
-                time.sleep(0.5)
+                time.sleep(1)  # 增加延迟
             
-            # 小延迟让嵌入开始积累
-            time.sleep(1)
+            # 小延迟让嵌入开始积累 - 增加延迟
+            time.sleep(2)
             
             logger.info("启动结果发送线程...")
             result_thread.start()
@@ -671,6 +740,14 @@ def run_worker(args):
                         logger.info(f"块队列大小: {chunk_queue.qsize()}, 结果队列大小: {result_queue.qsize()}")
                         logger.info(f"切分完成标志: {chunk_done.is_set()}, 嵌入完成标志: {embedding_done.is_set()}")
                         
+                        # 获取内存使用信息
+                        try:
+                            process = psutil.Process(os.getpid())
+                            memory_mb = process.memory_info().rss / (1024 * 1024)
+                            logger.info(f"进程内存使用: {memory_mb:.1f}MB")
+                        except:
+                            pass
+                        
                         # 更新进度
                         system_monitor.update_progress()
                 except KeyboardInterrupt:
@@ -698,7 +775,19 @@ def run_worker(args):
         logger.error(traceback.format_exc())
     finally:
         # 停止监控
-        system_monitor.stop()
+        if system_monitor:
+            try:
+                system_monitor.stop()
+            except:
+                pass
+        
+        # 清理线程 - 确保即使在early exit时也能执行
+        for thread in thread_pool:
+            try:
+                if hasattr(thread, 'is_alive') and thread.is_alive():
+                    thread.join(timeout=1)
+            except:
+                pass
         
         # 清理资源
         if db_processor:
@@ -709,6 +798,26 @@ def run_worker(args):
         
         if comm:
             try:
-                comm.close()
+                # 先关闭单个socket，再关闭context
+                for socket_name in list(comm.sockets.keys()):
+                    try:
+                        comm.sockets[socket_name].close(0)
+                    except:
+                        pass
+                # 延迟后关闭context
+                time.sleep(0.2)
+                try:
+                    comm.context.term()
+                except:
+                    pass
+            except:
+                pass
+        
+        # 清理MPS资源
+        if device == "mps":
+            try:
+                import torch
+                torch.mps.empty_cache()
+                time.sleep(0.5)  # 给MPS一些时间完成操作
             except:
                 pass
