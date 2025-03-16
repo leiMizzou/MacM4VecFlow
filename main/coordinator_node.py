@@ -368,6 +368,7 @@ def run_coordinator(args):
     # 创建通信和数据库处理对象
     comm = None
     db_processor = None
+    system_monitor = None  # 初始化为None
     
     try:
         # 数据库配置
@@ -379,15 +380,18 @@ def run_coordinator(args):
             'password': args.db_password,
             'options': f'-c search_path={args.db_schema}'
         }
+        # 创建健康监控
+        system_monitor = SystemMonitor(timeout=300)  # 5分钟无进度报警
+        system_monitor.start()
         
         # 初始化数据库处理器
         db_processor = DatabaseProcessor(db_config)
-        
+
         # 连接数据库
         if not db_processor.connect():
             logger.error("无法连接到数据库，程序退出")
             return
-            
+        
         # 创建向量表
         table_name = args.target_table
         if not db_processor.setup_vector_table(table_name, schema=args.db_schema):
