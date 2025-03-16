@@ -186,22 +186,19 @@ class DatabaseProcessor:
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
-                    # 构建表创建SQL
+                    # 使用直接的表结构定义，而非配置字典
+                    # 这样更不容易出错，且易于阅读和调试
                     create_table_sql = f"""
                     CREATE TABLE IF NOT EXISTS {full_table_name} (
-                        {self.table_config['id_field']} {self.table_config['id_type']},
-                        {self.table_config['report_field']} {self.table_config['report_type']},
-                        {self.table_config['chunk_id_field']} {self.table_config['chunk_id_type']},
-                        {self.table_config['text_field']} {self.table_config['text_type']},
-                        {self.table_config['vector_field']} {self.table_config['vector_type']},
-                        {self.table_config['timestamp_field']} {self.table_config['timestamp_type']}
+                        id SERIAL PRIMARY KEY,
+                        report_number TEXT NOT NULL,
+                        chunk_id TEXT NOT NULL,
+                        text_chunk TEXT NOT NULL,
+                        embedding public.vector({self.vector_dim}),
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(chunk_id)
+                    );
                     """
-                    
-                    # 处理唯一约束
-                    if self.table_config.get('chunk_id_unique', False):
-                        create_table_sql += f",\nUNIQUE({self.table_config['chunk_id_field']})"
-                    
-                    create_table_sql += "\n);"
                     
                     # 添加错误处理和重试逻辑
                     max_retries = 3
@@ -226,7 +223,7 @@ class DatabaseProcessor:
                             index_name = f"{table_name}_embedding_idx"
                             cur.execute(f"""
                             CREATE INDEX IF NOT EXISTS {index_name} 
-                            ON {full_table_name} USING ivfflat ({self.table_config['vector_field']} public.vector_cosine_ops)
+                            ON {full_table_name} USING ivfflat (embedding public.vector_cosine_ops)
                             WITH (lists = 100);
                             """)
                             break
@@ -244,7 +241,7 @@ class DatabaseProcessor:
             logger.error(f"设置向量数据库表失败: {e}")
             logger.error(traceback.format_exc())
             return False
-
+        
     def store_vectors(self, table_name: str, data: List[Tuple], schema="device") -> bool:
         """
         将向量数据批量存储到数据库
@@ -277,10 +274,10 @@ class DatabaseProcessor:
                         temp_table = f"temp_{table_name}_{int(time.time())}_{random.randint(1000, 9999)}"
                         cur.execute(f"""
                         CREATE TEMPORARY TABLE {temp_table} (
-                            {self.table_config['report_field']} TEXT,
-                            {self.table_config['chunk_id_field']} TEXT,
-                            {self.table_config['text_field']} TEXT,
-                            {self.table_config['vector_field']} {self.table_config['vector_type']}
+                            report_number TEXT,
+                            chunk_id TEXT,
+                            text_chunk TEXT,
+                            embedding public.vector({self.vector_dim})
                         ) ON COMMIT DROP;
                         """)
                         
@@ -299,39 +296,21 @@ class DatabaseProcessor:
                         cur.copy_expert(f"COPY {temp_table} FROM STDIN", buffer)
                         
                         # 将临时表数据插入到正式表，处理冲突
-                        if self.table_config.get('chunk_id_unique', False):
-                            # 使用ON CONFLICT处理重复数据
-                            cur.execute(f"""
-                            INSERT INTO {full_table_name} (
-                                {self.table_config['report_field']}, 
-                                {self.table_config['chunk_id_field']}, 
-                                {self.table_config['text_field']}, 
-                                {self.table_config['vector_field']}
-                            )
-                            SELECT 
-                                {self.table_config['report_field']}, 
-                                {self.table_config['chunk_id_field']}, 
-                                {self.table_config['text_field']}, 
-                                {self.table_config['vector_field']} 
-                            FROM {temp_table}
-                            ON CONFLICT ({self.table_config['chunk_id_field']}) DO NOTHING;
-                            """)
-                        else:
-                            # 不检查冲突直接插入
-                            cur.execute(f"""
-                            INSERT INTO {full_table_name} (
-                                {self.table_config['report_field']}, 
-                                {self.table_config['chunk_id_field']}, 
-                                {self.table_config['text_field']}, 
-                                {self.table_config['vector_field']}
-                            )
-                            SELECT 
-                                {self.table_config['report_field']}, 
-                                {self.table_config['chunk_id_field']}, 
-                                {self.table_config['text_field']}, 
-                                {self.table_config['vector_field']} 
-                            FROM {temp_table};
-                            """)
+                        cur.execute(f"""
+                        INSERT INTO {full_table_name} (
+                            report_number, 
+                            chunk_id, 
+                            text_chunk, 
+                            embedding
+                        )
+                        SELECT 
+                            report_number, 
+                            chunk_id, 
+                            text_chunk, 
+                            embedding 
+                        FROM {temp_table}
+                        ON CONFLICT (chunk_id) DO NOTHING;
+                        """)
                         
                         conn.commit()
                     return True
@@ -358,25 +337,12 @@ class DatabaseProcessor:
                                     batch = data[i:i + batch_size]
                                     
                                     # 构建SQL语句
-                                    if self.table_config.get('chunk_id_unique', False):
-                                        sql = f"""
-                                        INSERT INTO {full_table_name} 
-                                        ({self.table_config['report_field']}, 
-                                         {self.table_config['chunk_id_field']}, 
-                                         {self.table_config['text_field']}, 
-                                         {self.table_config['vector_field']})
-                                        VALUES %s
-                                        ON CONFLICT ({self.table_config['chunk_id_field']}) DO NOTHING;
-                                        """
-                                    else:
-                                        sql = f"""
-                                        INSERT INTO {full_table_name} 
-                                        ({self.table_config['report_field']}, 
-                                         {self.table_config['chunk_id_field']}, 
-                                         {self.table_config['text_field']}, 
-                                         {self.table_config['vector_field']})
-                                        VALUES %s;
-                                        """
+                                    sql = f"""
+                                    INSERT INTO {full_table_name} 
+                                    (report_number, chunk_id, text_chunk, embedding)
+                                    VALUES %s
+                                    ON CONFLICT (chunk_id) DO NOTHING;
+                                    """
                                     
                                     execute_values(cur, sql, batch)
                                     
@@ -389,25 +355,12 @@ class DatabaseProcessor:
                                     # 尝试一条一条地插入
                                     for item in batch:
                                         try:
-                                            if self.table_config.get('chunk_id_unique', False):
-                                                sql = f"""
-                                                INSERT INTO {full_table_name}
-                                                ({self.table_config['report_field']}, 
-                                                 {self.table_config['chunk_id_field']}, 
-                                                 {self.table_config['text_field']}, 
-                                                 {self.table_config['vector_field']})
-                                                VALUES (%s, %s, %s, %s)
-                                                ON CONFLICT ({self.table_config['chunk_id_field']}) DO NOTHING;
-                                                """
-                                            else:
-                                                sql = f"""
-                                                INSERT INTO {full_table_name}
-                                                ({self.table_config['report_field']}, 
-                                                 {self.table_config['chunk_id_field']}, 
-                                                 {self.table_config['text_field']}, 
-                                                 {self.table_config['vector_field']})
-                                                VALUES (%s, %s, %s, %s);
-                                                """
+                                            sql = f"""
+                                            INSERT INTO {full_table_name}
+                                            (report_number, chunk_id, text_chunk, embedding)
+                                            VALUES (%s, %s, %s, %s)
+                                            ON CONFLICT (chunk_id) DO NOTHING;
+                                            """
                                             
                                             cur.execute(sql, item)
                                             conn.commit()
@@ -420,8 +373,8 @@ class DatabaseProcessor:
                     return False
 
     def fetch_partitioned_data(self, table_name: str, source_field: str, text_field: str, 
-                              partition_id: int, total_partitions: int, 
-                              limit=500000, batch_size=10000, schema="device") -> Generator[List[Tuple[str, str]], None, None]:
+                            partition_id: int, total_partitions: int, 
+                            limit=500000, batch_size=10000, schema="device") -> Generator[List[Tuple[str, str]], None, None]:
         """
         分区获取数据，用于分布式处理
         
@@ -445,10 +398,13 @@ class DatabaseProcessor:
                 with conn.cursor() as cur:
                     try:
                         # 创建临时表进行分区
+                        # 注意：text_column_name变量用于在临时表中明确指定列名
+                        text_column_name = "text_content"  # 使用明确的列名避免混淆
+                        
                         cur.execute(f"""
                         CREATE TEMPORARY TABLE temp_partitioned_data AS
-                        SELECT {source_field} as report_number, {text_field},
-                               ROW_NUMBER() OVER (ORDER BY {source_field}) as row_num
+                        SELECT {source_field} as report_number, {text_field} as {text_column_name},
+                            ROW_NUMBER() OVER (ORDER BY {source_field}) as row_num
                         FROM {full_table_name} 
                         WHERE {text_field} IS NOT NULL 
                         LIMIT %s
@@ -478,8 +434,9 @@ class DatabaseProcessor:
                             
                             logger.debug(f"获取行 {current_start} 到 {current_end}")
                             
-                            cur.execute("""
-                            SELECT report_number, text_field
+                            # 使用正确的列名从临时表中选择数据
+                            cur.execute(f"""
+                            SELECT report_number, {text_column_name}
                             FROM temp_partitioned_data
                             WHERE row_num BETWEEN %s AND %s
                             ORDER BY row_num

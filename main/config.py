@@ -35,6 +35,8 @@ VECTOR_DIM = 384  # 使用的向量嵌入维度
 # 默认模型配置
 DEFAULT_MODEL = 'sentence-transformers/all-MiniLM-L6-v2'
 
+# Replace the existing DB_TABLE_CONFIG in config.py with this:
+
 # 数据库表配置 - 可由管理员手动修改以适应不同需求
 DB_TABLE_CONFIG = {
     # 主键字段，自动递增

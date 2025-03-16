@@ -427,24 +427,29 @@ def run_coordinator(args):
         chunk_done = Event()
         embedding_done = Event()
         
+        # Replace the worker connection waiting section in coordinator_node.py (around line 435-445)
+
         # 等待工作节点连接
         logger.info("等待工作节点连接...(10秒超时)")
         worker_info = None
         start_wait = time.time()
+        print("等待工作节点连接: ", end="", flush=True)
         while time.time() - start_wait < 10:
             worker_info = comm.receive_message('workers', timeout=1000)
             if worker_info:
+                print()  # End the line of dots
                 logger.info(f"工作节点已连接: {worker_info}")
                 break
-            logger.info(".", end="")
+            print(".", end="", flush=True)
             time.sleep(1)
-        
+        print()  # Make sure to end the line of dots
+
         if not worker_info:
-            logger.info("\n没有工作节点连接，将以单机模式运行")
+            logger.info("没有工作节点连接，将以单机模式运行")
             total_partitions = 1
             # 继续执行单机模式...
         else:
-            logger.info(f"\n工作节点已连接")
+            logger.info(f"工作节点已连接")
             total_partitions = 2  # 固定使用两个分区(协调器和一个工作节点)
         
         # 获取总数据量

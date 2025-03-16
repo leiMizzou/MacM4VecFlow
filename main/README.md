@@ -55,6 +55,40 @@ CREATE SCHEMA IF NOT EXISTS device;
 * `main.py` - 主程序入口
 
 ## 使用方法
+python main.py --role coordinator \
+    --db-host 169.254.22.165 \
+    --db-port 5432 \
+    --db-name fda_device \
+    --db-user postgres \
+    --db-password 12345687 \
+    --db-schema device \
+    --source-table event_texts \
+    --target-table event_text_vectors \
+    --id-field id \
+    --text-field text \
+    --host 0.0.0.0 \
+    --coordinator-port 5555 \
+    --worker-port 5556 \
+    --limit 500000 \
+    --log-level INFO
+
+
+python main.py --role worker \
+    --db-host 169.254.22.165 \
+    --db-port 5432 \
+    --db-name fda_device \
+    --db-user postgres \
+    --db-password 12345687 \
+    --db-schema device \
+    --source-table event_texts \
+    --target-table event_text_vectors \
+    --id-field id \
+    --text-field text \
+    --coordinator-host 169.254.197.53 \
+    --coordinator-port 5555 \
+    --worker-port 5556 \
+    --limit 500000 \
+    --log-level INFO
 
 ### 启动协调器节点
 
