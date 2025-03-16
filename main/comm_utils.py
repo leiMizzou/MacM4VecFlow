@@ -175,7 +175,7 @@ class DistributedComm:
                 return None
                 
             # 检查是否为ROUTER套接字 (协调器接收工作节点消息)
-            if self.role == COORDINATOR and socket_name == 'workers':
+            if self.role == COORDINATOR and socket_name in ['workers', 'tasks']:
                 # ROUTER套接字需要接收身份标识和消息内容
                 try:
                     identity = self.sockets[socket_name].recv_string()
@@ -190,7 +190,7 @@ class DistributedComm:
                     # 处理心跳消息 - 记录但不返回
                     if isinstance(parsed_message, dict) and parsed_message.get('type') == 'heartbeat':
                         logger.debug(f"收到工作节点 {identity} 的心跳, 状态: CPU {parsed_message.get('stats', {}).get('cpu', 'N/A')}%, "
-                                   f"内存 {parsed_message.get('stats', {}).get('memory', 'N/A')}%")
+                                f"内存 {parsed_message.get('stats', {}).get('memory', 'N/A')}%")
                         return None
                         
                     return parsed_message
@@ -212,8 +212,7 @@ class DistributedComm:
             logger.error(traceback.format_exc())
             if 'message' in locals():
                 logger.error(f"Raw message content (first 100 chars): {repr(message[:100] if message else 'None')}")
-            return None
-            
+            return None       
     def close(self):
         """关闭所有通信资源"""
         self.active = False
