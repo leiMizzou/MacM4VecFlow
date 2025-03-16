@@ -105,11 +105,6 @@ def enhance_mps_performance():
     os.environ["MTL_SHADER_VALIDATION"] = "0"    # 禁用shader验证提高性能
     os.environ["MTL_SHADER_CACHE_MODE"] = "11"   # 优化shader缓存
     
-    # 新增: 设置Metal性能提示
-    os.environ["MTL_USE_COMMAND_BUFFERS_FROM_POOLS"] = "1"  # 使用命令缓冲池
-    os.environ["MTL_PREFER_INTEGRATED_GPU"] = "0"           # 偏好使用独立GPU（如果有）
-    os.environ["MTL_OPTIMIZATION_LEVEL"] = "2"              # 最高优化级别
-    
     # 4. 预热MPS设备
     try:
         # 创建随机数据来预热图形管道
@@ -174,7 +169,7 @@ def enhance_mps_performance():
         
         # 创建监视器
         global mps_memory_monitor
-        mps_memory_monitor = MPSMemoryMonitor(threshold_mb=3000)  # 降低阈值到3GB
+        mps_memory_monitor = MPSMemoryMonitor(threshold_mb=4000)  # 4GB阈值
         logger.info("  ✓ MPS内存监视器已启动")
     except Exception as e:
         logger.warning(f"  ⚠️ 配置MPS内存优化时出错: {e}")
@@ -192,28 +187,7 @@ def clean_memory(force_gc=False):
         # Synchronize MPS stream before cleaning
         if hasattr(torch.mps, 'synchronize'):
             torch.mps.synchronize()
-        
-        # 更积极的MPS缓存清理
-        try:
-            # 尝试先同步再清理
-            if hasattr(torch.mps, '_synchronize'):
-                torch.mps._synchronize()
-            torch.mps.empty_cache()
-            
-            # 额外的清理步骤
-            if hasattr(torch.mps, 'current_allocated_memory'):
-                allocated = torch.mps.current_allocated_memory() / (1024 * 1024)
-                if allocated > 2000:  # 如果MPS内存使用超过2GB
-                    logger.debug(f"MPS内存使用: {allocated:.1f}MB，执行深度清理")
-                    # 创建临时张量强制刷新缓存
-                    try:
-                        dummy = torch.zeros(1, device="mps")
-                        del dummy
-                    except:
-                        pass
-                    torch.mps.empty_cache()
-        except Exception as e:
-            logger.debug(f"MPS内存清理时出错: {e}")
+        torch.mps.empty_cache()
         
         # 检查MPS内存监视器
         if 'mps_memory_monitor' in globals():
@@ -221,16 +195,8 @@ def clean_memory(force_gc=False):
     
     if force_gc:
         # More aggressive cleanup
-        for _ in range(3):  # 增加到3次收集循环
+        for _ in range(2):  # Multiple collections can help with fragmentation
             gc.collect()
-        
-        # 检查内存使用并输出日志
-        try:
-            process = psutil.Process(os.getpid())
-            memory_mb = process.memory_info().rss / (1024 * 1024)
-            logger.debug(f"内存使用: {memory_mb:.1f}MB (强制清理后)")
-        except:
-            pass
 
 class SystemMonitor:
     """监控系统健康状态并在需要时干预"""
@@ -241,15 +207,12 @@ class SystemMonitor:
         self.active = False
         self.lock = threading.RLock()
         self.last_progress = time.time()
-        self.last_memory_check = time.time()
-        self.memory_check_interval = 30  # 内存检查间隔(秒)
         
     def start(self):
         """启动监控"""
         with self.lock:
             self.active = True
             self.last_progress = time.time()
-            self.last_memory_check = time.time()
             self._restart_timer()
             logger.info(f"系统监控已启动，无活动超时时间: {self.timeout}秒")
             
@@ -266,39 +229,6 @@ class SystemMonitor:
         with self.lock:
             self.last_progress = time.time()
             self._restart_timer()
-            
-            # 定期检查内存使用情况
-            current_time = time.time()
-            if current_time - self.last_memory_check >= self.memory_check_interval:
-                self._check_memory_usage()
-                self.last_memory_check = current_time
-            
-    def _check_memory_usage(self):
-        """检查系统内存使用情况"""
-        try:
-            process = psutil.Process(os.getpid())
-            memory_mb = process.memory_info().rss / (1024 * 1024)
-            system_memory = psutil.virtual_memory()
-            
-            # 输出内存使用状态
-            logger.info(f"内存使用: 进程 {memory_mb:.1f}MB, 系统 {system_memory.percent}% "
-                        f"(可用: {system_memory.available/(1024*1024*1024):.1f}GB)")
-            
-            # 检查是否内存压力过大
-            if memory_mb > 4000 or system_memory.percent > 90:
-                logger.warning(f"⚠️ 内存压力较大! 进程: {memory_mb:.1f}MB, 系统: {system_memory.percent}%")
-                # 执行强制清理
-                clean_memory(force_gc=True)
-                
-                # 如果设备是MPS，额外清理GPU内存
-                if device == "mps" and hasattr(torch.mps, 'empty_cache'):
-                    torch.mps.empty_cache()
-                    
-                # 重新检查内存
-                memory_mb = process.memory_info().rss / (1024 * 1024)
-                logger.info(f"清理后内存使用: {memory_mb:.1f}MB")
-        except Exception as e:
-            logger.error(f"检查内存使用时出错: {e}")
             
     def _restart_timer(self):
         """重启监控定时器"""
@@ -325,33 +255,10 @@ class SystemMonitor:
             mem_info = psutil.virtual_memory()
             logger.error(f"系统内存: {mem_info.percent}% 使用中, 可用: {mem_info.available/(1024*1024*1024):.1f}GB")
             
-            # 输出当前进程内存使用
-            try:
-                process = psutil.Process(os.getpid())
-                memory_mb = process.memory_info().rss / (1024 * 1024)
-                logger.error(f"进程内存使用: {memory_mb:.1f}MB")
-            except:
-                pass
-                
             # 输出Python线程信息
             logger.error("活动线程:")
             for thread in threading.enumerate():
                 logger.error(f"  - {thread.name} ({'活动' if thread.is_alive() else '非活动'})")
-                
-            # 尝试恢复 - 清理内存
-            try:
-                clean_memory(force_gc=True)
-                logger.info("已执行内存清理尝试恢复")
-                
-                # 如果是MPS，尝试重置设备
-                if device == "mps":
-                    try:
-                        torch.mps.empty_cache()
-                        logger.info("已清空MPS缓存")
-                    except:
-                        pass
-            except:
-                pass
                 
             # 启动新的定时器
             self._restart_timer()
@@ -384,23 +291,24 @@ def optimize_pipeline_concurrency():
             
             if is_m4:
                 logger.info(f"检测到M4芯片: {chip_info}")
-                # M4芯片优化配置 - 调整以解决队列瓶颈问题
-                # 1. 文本切分 - 减少进程数以避免过快生产
-                num_chunk_processes = max(1, physical_cores - 3)
+                # M4芯片优化配置
+                # 1. 文本切分 - CPU密集型，但不需要太多内存
+                num_chunk_processes = max(2, physical_cores - 2)
                 
-                # 2. 嵌入计算 - 增加进程数以加快消费
-                # M4 MPS支持异步执行但需要更多并行进程
-                num_embedding_processes = 3  
+                # 2. 嵌入计算 - MPS (GPU) 瓶颈任务
+                # M4 MPS支持异步执行但并行性有限
+                # 通常2-3个进程能达到最佳平衡
+                num_embedding_processes = 2  
                 
-                # 3. 队列大小优化 - 减小块队列大小缓解瓶颈
-                chunk_queue_size = 2000  # 较小的缓冲区，防止内存过载
-                result_queue_size = 8000  # 较大的结果缓冲区，避免结果处理瓶颈
+                # 3. 队列大小优化
+                chunk_queue_size = 5000  # 较小的缓冲区，防止内存过载
+                result_queue_size = 10000  # 适中的结果缓冲区
                 
                 # 4. 数据库并发写入连接
                 db_pool_size = min(physical_cores, 6)
                 
-                # 5. 设置嵌入批处理大小 - 降低批处理大小提高响应性
-                embedding_batch_size = 256
+                # 5. 设置嵌入批处理大小
+                embedding_batch_size = 512  # 降低批处理大小提高响应性
             else:
                 # 其他Apple Silicon芯片
                 logger.info(f"检测到其他Apple Silicon芯片: {chip_info}")

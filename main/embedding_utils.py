@@ -86,7 +86,7 @@ def load_optimized_model(model_name, device):
     # 如果设备支持，转换为半精度
     if device == "mps":
         # 确保MPS支持fp16
-        if hasattr(torch, 'float16') and torch.backends.mps.is_available():
+        if hasattr(torch.ops.mps, '_has_fp16_support') and torch.ops.mps._has_fp16_support():
             # 将模型转换为fp16
             model.half()
             logger.info("✅ 模型已转换为半精度(fp16)")
@@ -115,7 +115,6 @@ class TextProcessor:
         self.chunk_size = CHUNK_CONFIG['chunk_size']
         self.overlap_tokens = CHUNK_CONFIG['overlap_tokens']
         self.batch_size = 512  # 默认批处理大小
-        self.max_token_length = 512  # 模型的最大令牌长度
         
         logger.info(f"正在加载模型到 {device} 设备...")
         
@@ -171,7 +170,7 @@ class TextProcessor:
 
     def process_text(self, text: str) -> List[str]:
         """
-        将文本切分为语义合理的块，并确保不超过模型最大令牌长度
+        将文本切分为语义合理的块
         
         参数:
             text: 输入文本
@@ -231,7 +230,7 @@ class TextProcessor:
                         current_chunk = []
                         current_length = 0
                     
-                    # 将长句处理成具有重叠的多个块，确保每块不超过最大令牌长度
+                    # 将长句处理成具有重叠的多个块
                     for i in range(0, sentence_length, target_chunk_size - overlap_tokens):
                         try:
                             # 处理子句片段
@@ -291,32 +290,7 @@ class TextProcessor:
             if not chunks and text.strip():
                 chunks.append(text.strip())
             
-            # 验证所有块都不超过最大令牌长度
-            verified_chunks = []
-            for chunk in chunks:
-                try:
-                    tokens = self.tokenizer.encode(chunk)
-                    # 检查是否超过最大令牌长度
-                    if len(tokens) > self.max_token_length:
-                        logger.warning(f"块长度超过最大限制 ({len(tokens)} > {self.max_token_length})，进行再次分割")
-                        # 分割成更小的块
-                        for i in range(0, len(tokens), self.max_token_length - self.overlap_tokens):
-                            sub_tokens = tokens[i:i + self.max_token_length]
-                            sub_text = self.tokenizer.decode(sub_tokens)
-                            if sub_text.strip():
-                                verified_chunks.append(sub_text)
-                    else:
-                        verified_chunks.append(chunk)
-                except Exception as e:
-                    logger.warning(f"验证块令牌长度时出错: {e}，使用简单文本分割")
-                    # 使用简单的文本分割作为回退
-                    words = chunk.split()
-                    for i in range(0, len(words), self.max_token_length//4):  # 粗略估计1个词=4个令牌
-                        sub_chunk = ' '.join(words[i:i + self.max_token_length//4])
-                        if sub_chunk.strip():
-                            verified_chunks.append(sub_chunk)
-            
-            return verified_chunks
+            return chunks
             
         except Exception as e:
             logger.error(f"处理文本时发生错误: {e}")
@@ -371,14 +345,14 @@ class TextProcessor:
             if device == "mps":
                 # 根据平均文本长度动态调整批大小
                 if avg_token_len < 50:
-                    batch_size = 512  # 短文本使用更大批次，但比以前更保守
+                    batch_size = 1024  # 短文本使用更大批次
                 elif avg_token_len < 100:
-                    batch_size = 256   # 中等长度文本，减小批次
+                    batch_size = 512   # 中等长度文本
                 else:
-                    batch_size = 128   # 长文本使用更小批次
+                    batch_size = 256   # 长文本使用小批次
             else:
                 # CPU处理使用较小批次避免内存问题
-                batch_size = min(128, max(32, int(3000 / avg_token_len)))
+                batch_size = min(256, max(32, int(5000 / avg_token_len)))
             
             # 使用错误恢复的嵌入生成
             # 将文本分批处理，提高容错性
@@ -415,7 +389,7 @@ class TextProcessor:
                             all_embeddings[idx] = np.zeros(self.vector_dim)
                 
                 # 定期清理MPS缓存
-                if device == "mps" and i % (batch_size * 2) == 0:  # 更频繁地清理
+                if device == "mps" and i % (batch_size * 3) == 0:
                     torch.mps.empty_cache()
                     
             # 构建最终结果 - 填充原始位置
