@@ -26,8 +26,8 @@ This project is built on the macA4 architecture, forming a distributed system by
 
 1. 克隆代码库:
 ```bash
-git clone https://github.com/yourusername/distributed-vector-processor.git
-cd distributed-vector-processor
+git clone https://github.com/leiMizzou/MacM4VecFlow.git
+cd MacM4VecFlow/main
 ```
 
 2. 安装依赖:
