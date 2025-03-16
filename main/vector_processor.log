@@ -1,0 +1,142 @@
+2025-03-16 19:42:22,334 - config - INFO - ✅ 使用 Apple MPS (M4 GPU) 加速
+2025-03-16 19:42:22,334 - config - INFO - 🚀 正在应用增强的MPS优化...
+2025-03-16 19:42:22,426 - config - INFO -   ✓ MPS图形管道预热完成
+2025-03-16 19:42:22,426 - config - INFO -   ✓ MPS内存优化配置完成，建议最大使用: 7.1GB
+2025-03-16 19:42:22,426 - config - INFO -   ✓ MPS内存监视器已启动
+2025-03-16 19:42:22,427 - config - INFO - ✓ PyTorch 线程配置: 5
+2025-03-16 19:42:36,336 - config - INFO - ✅ 使用 Apple MPS (M4 GPU) 加速
+2025-03-16 19:42:36,336 - config - INFO - 🚀 正在应用增强的MPS优化...
+2025-03-16 19:42:36,392 - config - INFO -   ✓ MPS图形管道预热完成
+2025-03-16 19:42:36,393 - config - INFO -   ✓ MPS内存优化配置完成，建议最大使用: 7.1GB
+2025-03-16 19:42:36,393 - config - INFO -   ✓ MPS内存监视器已启动
+2025-03-16 19:42:36,393 - config - INFO - ✓ PyTorch 线程配置: 5
+2025-03-16 19:42:37,301 - config - INFO - 启动协调器模式，时间: 2025-03-16 19:42:37
+2025-03-16 19:42:37,301 - config - INFO - 启动协调器模式，时间: 2025-03-16 19:42:37
+2025-03-16 19:42:37,301 - config - INFO - ================================================================================
+2025-03-16 19:42:37,301 - config - INFO - ================================================================================
+2025-03-16 19:42:37,301 - config - INFO - 启动协调器节点，监听地址: 0.0.0.0:5555
+2025-03-16 19:42:37,301 - config - INFO - 启动协调器节点，监听地址: 0.0.0.0:5555
+2025-03-16 19:42:37,301 - config - INFO - ================================================================================
+2025-03-16 19:42:37,301 - config - INFO - ================================================================================
+2025-03-16 19:42:37,301 - config - INFO - 🔧 应用 M4 系统优化...
+2025-03-16 19:42:37,301 - config - INFO - 🔧 应用 M4 系统优化...
+2025-03-16 19:42:37,301 - config - INFO -   ⚠️ 无法设置进程优先级
+2025-03-16 19:42:37,301 - config - INFO -   ⚠️ 无法设置进程优先级
+2025-03-16 19:42:37,301 - config - INFO -   ✓ NumPy 配置优化，使用 Accelerate 框架，最大线程: 10
+2025-03-16 19:42:37,301 - config - INFO -   ✓ NumPy 配置优化，使用 Accelerate 框架，最大线程: 10
+2025-03-16 19:42:37,301 - config - INFO -   ✓ 内存分配器已优化
+2025-03-16 19:42:37,301 - config - INFO -   ✓ 内存分配器已优化
+2025-03-16 19:42:37,301 - config - INFO -   ✓ 垃圾回收器已优化
+2025-03-16 19:42:37,301 - config - INFO -   ✓ 垃圾回收器已优化
+2025-03-16 19:42:37,301 - config - INFO - ✅ 系统优化完成
+2025-03-16 19:42:37,301 - config - INFO - ✅ 系统优化完成
+2025-03-16 19:42:37,305 - config - ERROR - 数据库连接池初始化失败: connection to server at "192.168.2.2", port 5432 failed: No route to host
+	Is the server running on that host and accepting TCP/IP connections?
+
+2025-03-16 19:42:37,305 - config - ERROR - 数据库连接池初始化失败: connection to server at "192.168.2.2", port 5432 failed: No route to host
+	Is the server running on that host and accepting TCP/IP connections?
+
+2025-03-16 19:42:37,305 - config - ERROR - 普通数据库连接也失败: connection to server at "192.168.2.2", port 5432 failed: No route to host
+	Is the server running on that host and accepting TCP/IP connections?
+
+2025-03-16 19:42:37,305 - config - ERROR - 普通数据库连接也失败: connection to server at "192.168.2.2", port 5432 failed: No route to host
+	Is the server running on that host and accepting TCP/IP connections?
+
+2025-03-16 19:42:37,306 - config - ERROR - 数据库连接失败: connection to server at "192.168.2.2", port 5432 failed: No route to host
+	Is the server running on that host and accepting TCP/IP connections?
+
+2025-03-16 19:42:37,306 - config - ERROR - 数据库连接失败: connection to server at "192.168.2.2", port 5432 failed: No route to host
+	Is the server running on that host and accepting TCP/IP connections?
+
+2025-03-16 19:42:37,306 - config - ERROR - 无法连接到数据库，程序退出
+2025-03-16 19:42:37,306 - config - ERROR - 无法连接到数据库，程序退出
+2025-03-16 19:42:37,306 - config - CRITICAL - 程序执行出现严重错误: cannot access local variable 'system_monitor' where it is not associated with a value
+2025-03-16 19:42:37,306 - config - CRITICAL - 程序执行出现严重错误: cannot access local variable 'system_monitor' where it is not associated with a value
+2025-03-16 19:42:37,306 - config - CRITICAL - Traceback (most recent call last):
+  File "/Users/lei/Documents/GitHub/MacM4VecFlow/main/main.py", line 74, in main
+    run_coordinator(args)
+  File "/Users/lei/Documents/GitHub/MacM4VecFlow/main/coordinator_node.py", line 779, in run_coordinator
+    system_monitor.stop()
+    ^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'system_monitor' where it is not associated with a value
+
+2025-03-16 19:42:37,306 - config - CRITICAL - Traceback (most recent call last):
+  File "/Users/lei/Documents/GitHub/MacM4VecFlow/main/main.py", line 74, in main
+    run_coordinator(args)
+  File "/Users/lei/Documents/GitHub/MacM4VecFlow/main/coordinator_node.py", line 779, in run_coordinator
+    system_monitor.stop()
+    ^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'system_monitor' where it is not associated with a value
+
+2025-03-16 19:42:37,306 - config - INFO - 程序运行结束，总耗时: 0.00 分钟 (0.01 秒)
+2025-03-16 19:42:37,306 - config - INFO - 程序运行结束，总耗时: 0.00 分钟 (0.01 秒)
+2025-03-16 19:42:37,306 - config - INFO - 完成时间: 2025-03-16 19:42:37
+2025-03-16 19:42:37,306 - config - INFO - 完成时间: 2025-03-16 19:42:37
+2025-03-16 19:47:59,533 - config - INFO - ✅ 使用 Apple MPS (M4 GPU) 加速
+2025-03-16 19:47:59,533 - config - INFO - 🚀 正在应用增强的MPS优化...
+2025-03-16 19:47:59,590 - config - INFO -   ✓ MPS图形管道预热完成
+2025-03-16 19:47:59,590 - config - INFO -   ✓ MPS内存优化配置完成，建议最大使用: 7.1GB
+2025-03-16 19:47:59,591 - config - INFO -   ✓ MPS内存监视器已启动
+2025-03-16 19:47:59,591 - config - INFO - ✓ PyTorch 线程配置: 5
+2025-03-16 19:48:00,493 - config - INFO - 启动协调器模式，时间: 2025-03-16 19:48:00
+2025-03-16 19:48:00,493 - config - INFO - 启动协调器模式，时间: 2025-03-16 19:48:00
+2025-03-16 19:48:00,493 - config - INFO - ================================================================================
+2025-03-16 19:48:00,493 - config - INFO - ================================================================================
+2025-03-16 19:48:00,493 - config - INFO - 启动协调器节点，监听地址: 0.0.0.0:5555
+2025-03-16 19:48:00,493 - config - INFO - 启动协调器节点，监听地址: 0.0.0.0:5555
+2025-03-16 19:48:00,493 - config - INFO - ================================================================================
+2025-03-16 19:48:00,493 - config - INFO - ================================================================================
+2025-03-16 19:48:00,493 - config - INFO - 🔧 应用 M4 系统优化...
+2025-03-16 19:48:00,493 - config - INFO - 🔧 应用 M4 系统优化...
+2025-03-16 19:48:00,493 - config - INFO -   ⚠️ 无法设置进程优先级
+2025-03-16 19:48:00,493 - config - INFO -   ⚠️ 无法设置进程优先级
+2025-03-16 19:48:00,493 - config - INFO -   ✓ NumPy 配置优化，使用 Accelerate 框架，最大线程: 10
+2025-03-16 19:48:00,493 - config - INFO -   ✓ NumPy 配置优化，使用 Accelerate 框架，最大线程: 10
+2025-03-16 19:48:00,493 - config - INFO -   ✓ 内存分配器已优化
+2025-03-16 19:48:00,493 - config - INFO -   ✓ 内存分配器已优化
+2025-03-16 19:48:00,493 - config - INFO -   ✓ 垃圾回收器已优化
+2025-03-16 19:48:00,493 - config - INFO -   ✓ 垃圾回收器已优化
+2025-03-16 19:48:00,493 - config - INFO - ✅ 系统优化完成
+2025-03-16 19:48:00,493 - config - INFO - ✅ 系统优化完成
+2025-03-16 19:48:00,494 - config - ERROR - 数据库连接池初始化失败: connection to server at "192.168.2.2", port 5432 failed: No route to host
+	Is the server running on that host and accepting TCP/IP connections?
+
+2025-03-16 19:48:00,494 - config - ERROR - 数据库连接池初始化失败: connection to server at "192.168.2.2", port 5432 failed: No route to host
+	Is the server running on that host and accepting TCP/IP connections?
+
+2025-03-16 19:48:00,494 - config - ERROR - 普通数据库连接也失败: connection to server at "192.168.2.2", port 5432 failed: No route to host
+	Is the server running on that host and accepting TCP/IP connections?
+
+2025-03-16 19:48:00,494 - config - ERROR - 普通数据库连接也失败: connection to server at "192.168.2.2", port 5432 failed: No route to host
+	Is the server running on that host and accepting TCP/IP connections?
+
+2025-03-16 19:48:00,495 - config - ERROR - 数据库连接失败: connection to server at "192.168.2.2", port 5432 failed: No route to host
+	Is the server running on that host and accepting TCP/IP connections?
+
+2025-03-16 19:48:00,495 - config - ERROR - 数据库连接失败: connection to server at "192.168.2.2", port 5432 failed: No route to host
+	Is the server running on that host and accepting TCP/IP connections?
+
+2025-03-16 19:48:00,495 - config - ERROR - 无法连接到数据库，程序退出
+2025-03-16 19:48:00,495 - config - ERROR - 无法连接到数据库，程序退出
+2025-03-16 19:48:00,495 - config - CRITICAL - 程序执行出现严重错误: cannot access local variable 'system_monitor' where it is not associated with a value
+2025-03-16 19:48:00,495 - config - CRITICAL - 程序执行出现严重错误: cannot access local variable 'system_monitor' where it is not associated with a value
+2025-03-16 19:48:00,495 - config - CRITICAL - Traceback (most recent call last):
+  File "/Users/lei/Documents/GitHub/MacM4VecFlow/main/main.py", line 74, in main
+    run_coordinator(args)
+  File "/Users/lei/Documents/GitHub/MacM4VecFlow/main/coordinator_node.py", line 779, in run_coordinator
+    system_monitor.stop()
+    ^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'system_monitor' where it is not associated with a value
+
+2025-03-16 19:48:00,495 - config - CRITICAL - Traceback (most recent call last):
+  File "/Users/lei/Documents/GitHub/MacM4VecFlow/main/main.py", line 74, in main
+    run_coordinator(args)
+  File "/Users/lei/Documents/GitHub/MacM4VecFlow/main/coordinator_node.py", line 779, in run_coordinator
+    system_monitor.stop()
+    ^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'system_monitor' where it is not associated with a value
+
+2025-03-16 19:48:00,495 - config - INFO - 程序运行结束，总耗时: 0.00 分钟 (0.00 秒)
+2025-03-16 19:48:00,495 - config - INFO - 程序运行结束，总耗时: 0.00 分钟 (0.00 秒)
+2025-03-16 19:48:00,495 - config - INFO - 完成时间: 2025-03-16 19:48:00
+2025-03-16 19:48:00,495 - config - INFO - 完成时间: 2025-03-16 19:48:00
