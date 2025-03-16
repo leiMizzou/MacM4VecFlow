@@ -23,12 +23,12 @@ def main():
     parser.add_argument('--role', choices=[COORDINATOR, WORKER], required=True, help='节点角色 (coordinator 或 worker)')
     
     # 数据库参数
-    parser.add_argument('--db-host', default='localhost', help='数据库主机地址')
+    parser.add_argument('--db-host', default='169.254.22.165', help='数据库主机地址')
     parser.add_argument('--db-port', type=int, default=5432, help='数据库端口')
-    parser.add_argument('--db-name', default='postgres', help='数据库名称')
+    parser.add_argument('--db-name', default='fda_device', help='数据库名称')
     parser.add_argument('--db-user', default='postgres', help='数据库用户名')
-    parser.add_argument('--db-password', default='postgres', help='数据库密码')
-    parser.add_argument('--db-schema', default='public', help='数据库模式')
+    parser.add_argument('--db-password', default='12345687', help='数据库密码')
+    parser.add_argument('--db-schema', default='device', help='数据库模式')
     
     # 表参数
     parser.add_argument('--source-table', default='event_texts', help='源数据表名')
