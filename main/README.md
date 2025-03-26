@@ -72,7 +72,6 @@ python main.py --role coordinator \
     --limit 500000 \
     --log-level INFO
 
-
 python main.py --role worker \
     --db-host 169.254.22.165 \
     --db-port 5432 \
