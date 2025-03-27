@@ -44,7 +44,7 @@ DB_TABLE_CONFIG = {
     'id_type': 'SERIAL PRIMARY KEY',
     
     # 报告编号字段，用于标识数据来源
-    'report_field': 'mdr_text_id',
+    'report_field': 'fulltext_id',
     'report_type': 'TEXT NOT NULL',
     
     # 块ID字段，用于唯一标识文本块

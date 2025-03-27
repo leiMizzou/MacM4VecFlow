@@ -191,7 +191,7 @@ class DatabaseProcessor:
                     create_table_sql = f"""
                     CREATE TABLE IF NOT EXISTS {full_table_name} (
                         id SERIAL PRIMARY KEY,
-                        report_number TEXT NOT NULL,
+                        fulltext_id TEXT NOT NULL,
                         chunk_id TEXT NOT NULL,
                         text_chunk TEXT NOT NULL,
                         embedding public.vector({self.vector_dim}),
@@ -248,7 +248,7 @@ class DatabaseProcessor:
         
         参数:
             table_name: 表名
-            data: 包含(report_number, chunk_id, text_chunk, embedding)元组的列表
+            data: 包含(fulltext_id, chunk_id, text_chunk, embedding)元组的列表
             schema: 模式名
         
         返回:
@@ -274,7 +274,7 @@ class DatabaseProcessor:
                         temp_table = f"temp_{table_name}_{int(time.time())}_{random.randint(1000, 9999)}"
                         cur.execute(f"""
                         CREATE TEMPORARY TABLE {temp_table} (
-                            report_number TEXT,
+                            fulltext_id TEXT,
                             chunk_id TEXT,
                             text_chunk TEXT,
                             embedding public.vector({self.vector_dim})
@@ -283,12 +283,12 @@ class DatabaseProcessor:
                         
                         # 准备数据进行COPY
                         buffer = StringIO()
-                        for report_number, chunk_id, text_chunk, embedding in data:
+                        for fulltext_id, chunk_id, text_chunk, embedding in data:
                             # 将嵌入格式化为PostgreSQL向量字符串
                             embedding_str = f"[{','.join(str(x) for x in embedding)}]"
                             # 转义分隔符和引号
                             text = text_chunk.replace('\t', ' ').replace('\n', ' ').replace('\\', '\\\\')
-                            buffer.write(f"{report_number}\t{chunk_id}\t{text}\t{embedding_str}\n")
+                            buffer.write(f"{fulltext_id}\t{chunk_id}\t{text}\t{embedding_str}\n")
                         
                         buffer.seek(0)
                         
@@ -298,13 +298,13 @@ class DatabaseProcessor:
                         # 将临时表数据插入到正式表，处理冲突
                         cur.execute(f"""
                         INSERT INTO {full_table_name} (
-                            report_number, 
+                            fulltext_id, 
                             chunk_id, 
                             text_chunk, 
                             embedding
                         )
                         SELECT 
-                            report_number, 
+                            fulltext_id, 
                             chunk_id, 
                             text_chunk, 
                             embedding 
@@ -339,7 +339,7 @@ class DatabaseProcessor:
                                     # 构建SQL语句
                                     sql = f"""
                                     INSERT INTO {full_table_name} 
-                                    (report_number, chunk_id, text_chunk, embedding)
+                                    (fulltext_id, chunk_id, text_chunk, embedding)
                                     VALUES %s
                                     ON CONFLICT (chunk_id) DO NOTHING;
                                     """
@@ -357,7 +357,7 @@ class DatabaseProcessor:
                                         try:
                                             sql = f"""
                                             INSERT INTO {full_table_name}
-                                            (report_number, chunk_id, text_chunk, embedding)
+                                            (fulltext_id, chunk_id, text_chunk, embedding)
                                             VALUES (%s, %s, %s, %s)
                                             ON CONFLICT (chunk_id) DO NOTHING;
                                             """
@@ -403,7 +403,7 @@ class DatabaseProcessor:
                         
                         cur.execute(f"""
                         CREATE TEMPORARY TABLE temp_partitioned_data AS
-                        SELECT {source_field} as report_number, {text_field} as {text_column_name},
+                        SELECT {source_field} as fulltext_id, {text_field} as {text_column_name},
                             ROW_NUMBER() OVER (ORDER BY {source_field}) as row_num
                         FROM {full_table_name} 
                         WHERE {text_field} IS NOT NULL 
@@ -436,7 +436,7 @@ class DatabaseProcessor:
                             
                             # 使用正确的列名从临时表中选择数据
                             cur.execute(f"""
-                            SELECT report_number, {text_column_name}
+                            SELECT fulltext_id, {text_column_name}
                             FROM temp_partitioned_data
                             WHERE row_num BETWEEN %s AND %s
                             ORDER BY row_num
@@ -481,7 +481,7 @@ class DatabaseProcessor:
                             
                             # 直接查询带偏移量
                             data_query = f"""
-                            SELECT {source_field} as report_number, {text_field}
+                            SELECT {source_field} as fulltext_id, {text_field}
                             FROM {full_table_name} 
                             WHERE {text_field} IS NOT NULL 
                             ORDER BY {source_field}
