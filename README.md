@@ -59,13 +59,13 @@ CREATE SCHEMA IF NOT EXISTS device;
 
 ## 使用方法
 python main.py --role coordinator \
-    --db-host 169.254.22.165 \
+    --db-host 127.0.0.1\
     --db-port 5432 \
-    --db-name fda_device \
+    --db-name fda_database \
     --db-user postgres \
     --db-password 12345687 \
-    --db-schema device \
-    --source-table event_texts \
+    --db-schema fda_data \
+    --source-table event_mdr_text \
     --target-table event_text_vectors \
     --id-field id \
     --text-field text \
@@ -77,17 +77,17 @@ python main.py --role coordinator \
 
 
 python main.py --role worker \
-    --db-host 169.254.22.165 \
+    --db-host 192.168.2.1 \
     --db-port 5432 \
-    --db-name fda_device \
+    --db-name fda_database \
     --db-user postgres \
     --db-password 12345687 \
-    --db-schema device \
-    --source-table event_texts \
+    --db-schema fda_data \
+    --source-table event_mdr_text \
     --target-table event_text_vectors \
     --id-field id \
     --text-field text \
-    --coordinator-host 169.254.197.53 \
+    --coordinator-host 192.168.2.1 \
     --coordinator-port 5555 \
     --worker-port 5556 \
     --limit 500000 \

@@ -153,6 +153,46 @@ class DistributedComm:
             logger.error(traceback.format_exc())
             return False
 
+    def send_message_to_identity(self, socket_name, identity, message, timeout=5000):
+        """
+        发送消息到指定套接字上的特定客户端
+        
+        参数:
+            socket_name: 套接字名称 ('workers', 'tasks')
+            identity: 客户端的ZMQ标识
+            message: 要发送的消息 (将被转换为JSON)
+            timeout: 发送超时(毫秒)
+            
+        返回:
+            发送成功返回True，否则返回False
+        """
+        try:
+            # 设置发送超时
+            if socket_name in self.sockets:
+                self.sockets[socket_name].setsockopt(zmq.SNDTIMEO, timeout)
+            
+            # 检查套接字是否可用
+            if socket_name not in self.sockets:
+                logger.error(f"尝试发送消息到不存在的套接字: {socket_name}")
+                return False
+                
+            # 将消息转换为JSON字符串
+            json_data = json.dumps(message)
+            logger.debug(f"向客户端 {identity} 发送消息: {json_data[:100]}...")  # 只打印前100个字符
+            
+            # 对于ROUTER套接字，需要先发送客户端标识
+            self.sockets[socket_name].send_string(identity, zmq.SNDMORE)
+            self.sockets[socket_name].send_string(json_data)
+            
+            return True
+        except zmq.error.Again:
+            logger.warning(f"发送消息到客户端 {identity} 超时")
+            return False
+        except Exception as e:
+            logger.error(f"发送消息到客户端 {identity} 时出错: {e}")
+            logger.error(traceback.format_exc())
+            return False
+
     def receive_message(self, socket_name, timeout=2000):
         """
         从指定套接字接收消息
@@ -193,6 +233,10 @@ class DistributedComm:
                                 f"内存 {parsed_message.get('stats', {}).get('memory', 'N/A')}%")
                         return None
                         
+                    # 为消息添加身份信息，以便上层处理
+                    if isinstance(parsed_message, dict):
+                        parsed_message['identity'] = identity
+                            
                     return parsed_message
                 except zmq.error.Again:
                     return None
@@ -212,7 +256,8 @@ class DistributedComm:
             logger.error(traceback.format_exc())
             if 'message' in locals():
                 logger.error(f"Raw message content (first 100 chars): {repr(message[:100] if message else 'None')}")
-            return None       
+            return None
+            
     def close(self):
         """关闭所有通信资源"""
         self.active = False

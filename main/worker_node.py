@@ -401,7 +401,8 @@ def run_worker(args):
         
         # 向协调器注册
         worker_info = {
-            'hostname': socket.gethostname(),  # 确保socket模块已正确导入
+            'hostname': socket.gethostname(),
+            'identity': comm.identity,  # 使用ZeroMQ的identity作为工作节点ID
             'pid': os.getpid(),
             'device': device,
             'cores': os.cpu_count(),
@@ -413,7 +414,24 @@ def run_worker(args):
             logger.error("无法连接到协调器，程序退出")
             return
         
-        logger.info("向协调器注册成功，等待任务分配...")
+        logger.info("向协调器注册成功，等待分区分配...")
+        
+        # 等待接收分区分配
+        partition_assigned = False
+        for _ in range(10):  # 最多尝试10次
+            assignment = comm.receive_message('coordinator', timeout=3000)
+            if assignment and isinstance(assignment, dict) and assignment.get('type') == 'partition_assignment':
+                partition_id = assignment.get('partition_id')
+                total_partitions = assignment.get('total_partitions')
+                logger.info(f"已接收分区分配: 分区ID={partition_id}, 总分区数={total_partitions}")
+                partition_assigned = True
+                break
+            time.sleep(1)
+        
+        if not partition_assigned:
+            logger.error("未接收到分区分配，使用默认值 (分区ID=2, 总分区数=2)")
+            partition_id = 2
+            total_partitions = 2
         
         # 获取优化配置
         pipeline_config = optimize_pipeline_concurrency()
@@ -430,10 +448,6 @@ def run_worker(args):
         # 用于表示完成的标志
         chunk_done = Event()
         embedding_done = Event()
-        
-        # 工作节点处理第二个分区
-        partition_id = 2
-        total_partitions = 2
         
         # 创建健康监控
         system_monitor = SystemMonitor(timeout=300)  # 5分钟无进度报警
@@ -588,7 +602,12 @@ def run_worker(args):
                 
                 # 通知协调器本节点处理完成 - 尝试多次发送确保成功
                 for attempt in range(5):
-                    if comm.send_message('tasks', {'status': 'complete', 'count': sent_count}):
+                    completion_message = {
+                        'status': 'complete', 
+                        'count': sent_count,
+                        'worker_id': comm.identity  # 包含工作节点标识
+                    }
+                    if comm.send_message('tasks', completion_message):
                         logger.info("成功发送完成通知到协调器")
                         break
                     else:

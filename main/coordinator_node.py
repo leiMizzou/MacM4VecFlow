@@ -410,6 +410,60 @@ def run_coordinator(args):
         logger.info("开始分布式数据处理...")
         logger.info("=" * 80)
         start_time = time.time()
+
+        # 等待工作节点连接
+        logger.info("等待工作节点连接...(30秒超时)")
+        worker_nodes = []  # 存储已连接工作节点的信息
+        start_wait = time.time()
+        print("等待工作节点连接: ", end="", flush=True)
+
+        # 在超时时间内尝试接收工作节点连接
+        while time.time() - start_wait < 30:  # 增加等待时间为30秒
+            worker_info = comm.receive_message('workers', timeout=1000)
+            if worker_info:
+                print(".", end="", flush=True)
+                
+                # 为工作节点分配唯一分区ID（从2开始，1是协调器）
+                worker_partition_id = len(worker_nodes) + 2
+                worker_identity = worker_info.get('identity', f"worker-{worker_partition_id}")
+                
+                # 存储工作节点信息
+                worker_info['partition_id'] = worker_partition_id
+                worker_info['identity'] = worker_identity
+                worker_nodes.append(worker_info)
+                
+                logger.info(f"工作节点已连接: {worker_identity}, 分配分区ID: {worker_partition_id}")
+                
+                # 发送分区分配信息给工作节点
+                partition_assignment = {
+                    'type': 'partition_assignment',
+                    'partition_id': worker_partition_id,
+                    'total_partitions': len(worker_nodes) + 1  # 协调器 + 当前工作节点数
+                }
+                
+                # 使用工作节点的identity作为客户端标识
+                comm.send_message_to_identity('workers', worker_identity, partition_assignment)
+                
+                # 最多支持2个工作节点
+                if len(worker_nodes) >= 2:
+                    logger.info("已达到最大工作节点数量(2)，停止等待更多连接")
+                    break
+            
+            print(".", end="", flush=True)
+            time.sleep(1)
+
+        print()  # 结束进度显示行
+
+        # 根据已连接工作节点数量计算总分区数
+        total_partitions = 1 + len(worker_nodes)  # 协调器 + 工作节点数量
+
+        if len(worker_nodes) == 0:
+            logger.info("没有工作节点连接，将以单机模式运行")
+        else:
+            logger.info(f"已连接 {len(worker_nodes)} 个工作节点，总分区数: {total_partitions}")
+
+        # 协调器始终处理第一个分区
+        partition_id = 1
         
         # 获取优化配置
         pipeline_config = optimize_pipeline_concurrency()
@@ -426,31 +480,6 @@ def run_coordinator(args):
         # 用于表示完成的标志
         chunk_done = Event()
         embedding_done = Event()
-        
-        # Replace the worker connection waiting section in coordinator_node.py (around line 435-445)
-
-        # 等待工作节点连接
-        logger.info("等待工作节点连接...(10秒超时)")
-        worker_info = None
-        start_wait = time.time()
-        print("等待工作节点连接: ", end="", flush=True)
-        while time.time() - start_wait < 10:
-            worker_info = comm.receive_message('workers', timeout=1000)
-            if worker_info:
-                print()  # End the line of dots
-                logger.info(f"工作节点已连接: {worker_info}")
-                break
-            print(".", end="", flush=True)
-            time.sleep(1)
-        print()  # Make sure to end the line of dots
-
-        if not worker_info:
-            logger.info("没有工作节点连接，将以单机模式运行")
-            total_partitions = 1
-            # 继续执行单机模式...
-        else:
-            logger.info(f"工作节点已连接")
-            total_partitions = 2  # 固定使用两个分区(协调器和一个工作节点)
         
         # 获取总数据量
         total_count = 0
@@ -484,9 +513,6 @@ def run_coordinator(args):
             """文本切分线程：从数据库获取文本并切分成块"""
             total_records = 0
             total_chunks = 0
-            
-            # 协调器处理第一个分区
-            partition_id = 1
             
             try:
                 with ProcessPoolExecutor(max_workers=num_chunk_processes) as chunk_pool:
@@ -620,18 +646,27 @@ def run_coordinator(args):
         def result_receiver():
             """结果接收线程：接收工作节点发送的嵌入向量结果"""
             received_count = 0
-            worker_complete = False
+            worker_complete = {}  # 跟踪每个工作节点的完成状态
+            
+            # 初始化工作节点完成状态
+            for worker in worker_nodes:
+                worker_id = worker.get('identity', 'unknown')
+                worker_complete[worker_id] = False
             
             try:
-                while not (worker_complete and embedding_done.is_set() and result_queue.empty()):
+                # 当存在工作节点时，等待所有工作节点完成或队列非空
+                all_workers_done = lambda: all(worker_complete.values()) if worker_complete else True
+                
+                while not all_workers_done() or not result_queue.empty():
                     try:
                         # 接收来自工作节点的消息
                         message = comm.receive_message('tasks', timeout=1000)
                         if message:
                             # 检查是否是完成消息
                             if isinstance(message, dict) and message.get('status') == 'complete':
-                                logger.info(f"工作节点报告完成，处理了 {message.get('count', 0)} 个向量")
-                                worker_complete = True
+                                worker_id = message.get('worker_id', 'unknown')
+                                logger.info(f"工作节点 {worker_id} 报告完成，处理了 {message.get('count', 0)} 个向量")
+                                worker_complete[worker_id] = True
                                 continue
                                 
                             # 处理批量向量数据
@@ -656,6 +691,11 @@ def run_coordinator(args):
                         else:
                             # 短暂暂停避免CPU高占用
                             time.sleep(0.1)
+                            
+                            # 如果没有工作节点，立即退出循环
+                            if not worker_nodes:
+                                break
+                                
                     except Exception as e:
                         logger.error(f"接收工作节点结果时出错: {e}")
                         logger.error(traceback.format_exc())
@@ -696,7 +736,7 @@ def run_coordinator(args):
             thread_pool.append(embedding_thread)
             
             # 创建结果接收线程
-            if worker_info:
+            if worker_nodes:
                 result_thread = Thread(target=result_receiver, name="ResultReceiver")
                 result_thread.daemon = True
                 thread_pool.append(result_thread)
@@ -712,7 +752,7 @@ def run_coordinator(args):
             embedding_thread.start()
             
             # 启动工作节点结果接收线程
-            if worker_info:
+            if worker_nodes:
                 logger.info("启动工作节点结果接收线程...")
                 result_thread.start()
             
