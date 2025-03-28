@@ -58,8 +58,12 @@ CREATE SCHEMA IF NOT EXISTS device;
 * `main.py` - 主程序入口
 
 ## 使用方法
+
+### 启动协调器节点
+
+```bash
 python main.py --role coordinator \
-    --db-host 127.0.0.1\
+    --db-host 192.168.2.1\
     --db-port 5432 \
     --db-name fda_database \
     --db-user postgres \
@@ -75,7 +79,11 @@ python main.py --role coordinator \
     --limit 500000 \
     --log-level INFO
 
+```
 
+### 启动工作节点
+
+```bash
 python main.py --role worker \
     --db-host 192.168.2.1 \
     --db-port 5432 \
@@ -92,45 +100,6 @@ python main.py --role worker \
     --worker-port 5556 \
     --limit 500000 \
     --log-level INFO
-
-### 启动协调器节点
-
-```bash
-python main.py --role coordinator \
-    --db-host localhost \
-    --db-port 5432 \
-    --db-name yourdb \
-    --db-user postgres \
-    --db-password yourpassword \
-    --db-schema public \
-    --source-table your_source_table \
-    --target-table your_vector_table \
-    --id-field id \
-    --text-field text \
-    --host 0.0.0.0 \
-    --coordinator-port 5555 \
-    --worker-port 5556 \
-    --limit 100000
-```
-
-### 启动工作节点
-
-```bash
-python main.py --role worker \
-    --db-host localhost \
-    --db-port 5432 \
-    --db-name yourdb \
-    --db-user postgres \
-    --db-password yourpassword \
-    --db-schema public \
-    --source-table your_source_table \
-    --target-table your_vector_table \
-    --id-field id \
-    --text-field text \
-    --coordinator-host 192.168.1.100 \
-    --coordinator-port 5555 \
-    --worker-port 5556 \
-    --limit 100000
 ```
 
 ## 配置说明
@@ -146,7 +115,7 @@ DB_TABLE_CONFIG = {
     'id_type': 'SERIAL PRIMARY KEY',
     
     # 报告编号字段，用于标识数据来源
-    'report_field': 'report_number',
+    'report_field': 'fulltext_id',
     'report_type': 'TEXT NOT NULL',
     
     # 块ID字段，用于唯一标识文本块
