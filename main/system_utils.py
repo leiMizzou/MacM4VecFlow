@@ -302,7 +302,7 @@ def optimize_pipeline_concurrency():
                 
                 # 3. 队列大小优化
                 chunk_queue_size = 5000  # 较小的缓冲区，防止内存过载
-                result_queue_size = 10000  # 适中的结果缓冲区
+                result_queue_size = 20000  # 适中的结果缓冲区
                 
                 # 4. 数据库并发写入连接
                 db_pool_size = min(physical_cores, 6)
