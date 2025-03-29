@@ -67,8 +67,8 @@ DB_TABLE_CONFIG = {
 
 # 块切分配置
 CHUNK_CONFIG = {
-    'chunk_size': 128,  # 目标令牌数
-    'overlap_tokens': 20,  # 块之间的重叠令牌数
+    'chunk_size': 256,  # 目标令牌数
+    'overlap_tokens': 25,  # 块之间的重叠令牌数
 }
 
 # 全局状态标志
