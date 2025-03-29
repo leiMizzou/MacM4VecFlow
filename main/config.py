@@ -33,7 +33,8 @@ WORKER = 'worker'  # 工作节点
 VECTOR_DIM = 384  # 使用的向量嵌入维度
 
 # 默认模型配置
-DEFAULT_MODEL = 'sentence-transformers/all-MiniLM-L6-v2'
+#DEFAULT_MODEL = 'sentence-transformers/all-MiniLM-L6-v2'
+DEFAULT_MODEL = 'BAAI/bge-small-en-v1.5'
 
 # Replace the existing DB_TABLE_CONFIG in config.py with this:
 
